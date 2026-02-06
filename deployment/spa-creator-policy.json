@@ -1,0 +1,32 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketWebsite",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketTagging",
+        "s3:PutBucketCors",
+        "s3:PutObject",
+        "s3:PutObjectAcl",
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::sandbox-spa-*",
+        "arn:aws:s3:::sandbox-spa-*/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/sandbox-spa-resources"
+    }
+  ]
+}

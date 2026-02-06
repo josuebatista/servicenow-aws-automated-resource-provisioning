@@ -1,0 +1,483 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ServiceNow-AWS Integration - SPA Creator with Full Dashboard (Sandbox Environment)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: 'sandbox'
+    Description: 'Environment name prefix for all resources'
+    AllowedValues:
+      - sandbox
+      - dev
+      - test
+
+Resources:
+  # ========================================
+  # S3 BUCKET FOR LAMBDA CODE STORAGE
+  # ========================================
+  LambdaCodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 
+        - '${EnvironmentName}-lambda-code-${AWS::AccountId}-${Suffix}'
+        - Suffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'ServiceNow Integration Demo'
+
+  # ========================================
+  # IAM ROLE FOR SPA CREATOR LAMBDA
+  # ========================================
+  SPACreatorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 
+        - '${EnvironmentName}-spa-creator-${Suffix}'
+        - Suffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: SPACreatorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:CreateBucket'
+                  - 's3:PutBucketWebsite'
+                  - 's3:PutBucketPolicy'
+                  - 's3:PutBucketPublicAccessBlock'
+                  - 's3:PutBucketTagging'
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${EnvironmentName}-spa-*'
+                  - !Sub 'arn:aws:s3:::${EnvironmentName}-spa-*/*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                Resource: !GetAtt ResourceTrackingTable.Arn
+
+  # ========================================
+  # IAM ROLE FOR BACKEND API LAMBDA
+  # ========================================
+  BackendAPILambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 
+        - '${EnvironmentName}-backend-api-${Suffix}'
+        - Suffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: BackendAPIPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${EnvironmentName}-spa-*'
+                  - !Sub 'arn:aws:s3:::${EnvironmentName}-spa-*/*'
+              - Effect: Allow
+                Action:
+                  - 'iam:GetUser'
+                  - 'iam:ListUserTags'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                Resource: !GetAtt ResourceTrackingTable.Arn
+
+  # ========================================
+  # DYNAMODB TABLE - RESOURCE TRACKING
+  # ========================================
+  ResourceTrackingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${EnvironmentName}-spa-resources'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH
+        - AttributeName: createdAt
+          KeyType: RANGE
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ========================================
+  # LAMBDA FUNCTION - SPA CREATOR
+  # ========================================
+  SPACreatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentName}-spa-creator'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt SPACreatorLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          ENVIRONMENT_NAME: !Ref EnvironmentName
+          DYNAMODB_TABLE: !Ref ResourceTrackingTable
+          BACKEND_API_URL: !Sub 'https://${BackendAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'message': 'SPA Creator - Code will be deployed in Step 2'})
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ========================================
+  # LAMBDA FUNCTION - BACKEND API (List Bucket Contents)
+  # ========================================
+  BackendListBucketFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentName}-backend-list-bucket'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt BackendAPILambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT_NAME: !Ref EnvironmentName
+          DYNAMODB_TABLE: !Ref ResourceTrackingTable
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                  },
+                  'body': json.dumps({'message': 'Backend API - Code will be deployed in Step 4'})
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ========================================
+  # LAMBDA FUNCTION - BACKEND API (Generate Upload URL)
+  # ========================================
+  BackendUploadURLFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentName}-backend-upload-url'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt BackendAPILambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT_NAME: !Ref EnvironmentName
+          DYNAMODB_TABLE: !Ref ResourceTrackingTable
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'POST,OPTIONS'
+                  },
+                  'body': json.dumps({'message': 'Backend API - Code will be deployed in Step 4'})
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ========================================
+  # LAMBDA FUNCTION - BACKEND API (Get User Info)
+  # ========================================
+  BackendUserInfoFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${EnvironmentName}-backend-user-info'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt BackendAPILambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT_NAME: !Ref EnvironmentName
+          DYNAMODB_TABLE: !Ref ResourceTrackingTable
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                  },
+                  'body': json.dumps({'message': 'Backend API - Code will be deployed in Step 4'})
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ========================================
+  # API GATEWAY - SPA CREATOR API
+  # ========================================
+  SPACreatorAPIGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${EnvironmentName}-spa-creator-api'
+      ProtocolType: HTTP
+      Description: 'API Gateway for creating user SPAs'
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  SPACreatorAPIStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref SPACreatorAPIGateway
+      StageName: prod
+      AutoDeploy: true
+      Description: 'Production stage for SPA Creator API'
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  SPACreatorAPIIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SPACreatorAPIGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SPACreatorFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  SPACreatorAPIRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SPACreatorAPIGateway
+      RouteKey: 'POST /create-user-spa'
+      Target: !Sub 'integrations/${SPACreatorAPIIntegration}'
+
+  SPACreatorLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SPACreatorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SPACreatorAPIGateway}/*/*'
+
+  # ========================================
+  # API GATEWAY - BACKEND API (for SPAs)
+  # ========================================
+  BackendAPIGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${EnvironmentName}-backend-api'
+      ProtocolType: HTTP
+      Description: 'Backend API for SPA functionality'
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  BackendAPIStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      StageName: prod
+      AutoDeploy: true
+      Description: 'Production stage for Backend API'
+      Tags:
+        Environment: !Ref EnvironmentName
+
+  # Backend API - List Bucket Contents
+  BackendListBucketIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt BackendListBucketFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  BackendListBucketRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      RouteKey: 'GET /bucket-contents'
+      Target: !Sub 'integrations/${BackendListBucketIntegration}'
+
+  BackendListBucketPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendListBucketFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BackendAPIGateway}/*/*'
+
+  # Backend API - Generate Upload URL
+  BackendUploadURLIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt BackendUploadURLFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  BackendUploadURLRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      RouteKey: 'POST /upload-url'
+      Target: !Sub 'integrations/${BackendUploadURLIntegration}'
+
+  BackendUploadURLPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendUploadURLFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BackendAPIGateway}/*/*'
+
+  # Backend API - Get User Info
+  BackendUserInfoIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt BackendUserInfoFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  BackendUserInfoRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BackendAPIGateway
+      RouteKey: 'GET /user-info'
+      Target: !Sub 'integrations/${BackendUserInfoIntegration}'
+
+  BackendUserInfoPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendUserInfoFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BackendAPIGateway}/*/*'
+
+# ========================================
+# OUTPUTS
+# ========================================
+Outputs:
+  SPACreatorAPIEndpoint:
+    Description: 'API Gateway endpoint URL for creating SPAs'
+    Value: !Sub 'https://${SPACreatorAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/create-user-spa'
+    Export:
+      Name: !Sub '${EnvironmentName}-spa-creator-endpoint'
+
+  BackendAPIEndpoint:
+    Description: 'Backend API endpoint URL for SPA functionality'
+    Value: !Sub 'https://${BackendAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${EnvironmentName}-backend-api-endpoint'
+
+  ResourceTrackingTableName:
+    Description: 'DynamoDB table for tracking created resources'
+    Value: !Ref ResourceTrackingTable
+    Export:
+      Name: !Sub '${EnvironmentName}-resource-tracking-table'
+
+  SPACreatorFunctionName:
+    Description: 'Lambda function name for SPA creator'
+    Value: !Ref SPACreatorFunction
+    Export:
+      Name: !Sub '${EnvironmentName}-spa-creator-function'
+
+  LambdaCodeBucketName:
+    Description: 'S3 bucket for Lambda code storage'
+    Value: !Ref LambdaCodeBucket
+
+  BackendLambdaFunctions:
+    Description: 'Backend Lambda function names'
+    Value: !Sub |
+      List Bucket: ${BackendListBucketFunction}
+      Upload URL: ${BackendUploadURLFunction}
+      User Info: ${BackendUserInfoFunction}
+
+  DeploymentInstructions:
+    Description: 'Next steps after CloudFormation deployment'
+    Value: |
+      Stack deployed successfully!
+      
+      Next steps:
+      1. Deploy Lambda function code (Step 2)
+      2. Generate SPA files (Step 3)
+      3. Deploy backend API Lambda code (Step 4)
+      4. Test the complete flow (Step 5)
