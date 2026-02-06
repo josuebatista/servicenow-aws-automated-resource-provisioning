@@ -210,7 +210,7 @@ This implementation demonstrates:
 
 ## Quick Start
 
-**Deploy in 3 commands**:
+### For Immediate Testing (Current Directory)
 ```bash
 # 1. Run automated deployment
 ./deploy.sh
@@ -222,6 +222,19 @@ This implementation demonstrates:
 cat API-REFERENCE.md
 ```
 
+### For Distribution (Create Portable Package)
+```bash
+# Create distributable package
+./create-deployment-package.sh
+
+# This creates:
+# - servicenow-aws-integration-v1.0.tar.gz
+# - servicenow-aws-integration-v1.0.zip
+
+# Share with other teams/accounts
+# Recipients extract and run ./deploy.sh
+```
+
 ---
 
 ## What's Included
@@ -230,6 +243,7 @@ cat API-REFERENCE.md
 - `deploy.sh` - One-click automated deployment script
 - `spa-creator-stack.yaml` - CloudFormation infrastructure template
 - `spa-creator-policy.json` - IAM policy for Lambda functions
+- `create-deployment-package.sh` - Creates distributable archive
 
 ### Lambda Function Code
 - `spa-creator-lambda.py` - Main SPA creator function
@@ -298,6 +312,71 @@ cat API-REFERENCE.md
 - **Scalability**: Auto-scales at every tier
 - **Resilience**: Automatic retries, error handling, state management
 - **Security**: Defense in depth with IAM, CORS, encryption
+
+---
+
+## Distribution & Sharing
+
+### Creating a Deployment Package
+
+For sharing with other teams, AWS accounts, or clients:
+```bash
+# Create portable deployment package
+./create-deployment-package.sh
+```
+
+This creates two archive formats:
+- **servicenow-aws-integration-v1.0.tar.gz** (Linux/Mac friendly)
+- **servicenow-aws-integration-v1.0.zip** (Windows friendly)
+
+### What Gets Packaged
+The archive contains everything needed for standalone deployment:
+- ✅ All source code (Lambda functions, CloudFormation)
+- ✅ All documentation (README, guides, references)
+- ✅ All utilities (deploy, test, cleanup scripts)
+- ✅ Pre-configured and ready to run
+
+### Distribution Use Cases
+
+**Internal Teams**:
+```bash
+# Share with development/QA teams
+scp servicenow-aws-integration-v1.0.tar.gz dev-team@server:/path/
+
+# Or upload to shared storage
+aws s3 cp servicenow-aws-integration-v1.0.tar.gz s3://shared-artifacts/
+```
+
+**Client Deliverables**:
+```bash
+# Professional package for client delivery
+# Includes all documentation for self-deployment
+# Client can deploy in their own AWS account
+```
+
+**Multi-Account Organizations**:
+```bash
+# Deploy same solution across dev/test/prod accounts
+# Extract once, deploy multiple times with different parameters
+```
+
+### Recipient Instructions
+
+After receiving the package:
+```bash
+# Extract
+tar -xzf servicenow-aws-integration-v1.0.tar.gz
+cd servicenow-aws-integration-v1.0
+
+# Configure AWS CLI (if not already done)
+aws configure
+
+# Deploy
+./deploy.sh
+
+# Test
+./test-complete-flow.sh
+```
 
 ---
 
@@ -381,6 +460,9 @@ cat SERVICENOW-INTEGRATION.md
 
 # Demo Script
 cat DEMO-SCRIPT.md
+
+# Full Deployment Guide
+cat DEPLOYMENT-GUIDE.md
 ```
 
 ### Monitor Resources
@@ -527,8 +609,11 @@ Organizations get:
 
 ## Quick Reference
 ```bash
-# Deploy
+# Deploy in current directory
 ./deploy.sh
+
+# Create distributable package
+./create-deployment-package.sh
 
 # Test
 ./test-complete-flow.sh
@@ -554,10 +639,11 @@ aws cloudformation delete-stack --stack-name servicenow-spa-creator
 
 1. **Deploy**: Run `./deploy.sh` to set up the infrastructure
 2. **Test**: Use `./test-complete-flow.sh` to validate functionality
-3. **Integrate**: Follow `SERVICENOW-INTEGRATION.md` to connect ServiceNow
-4. **Demo**: Use `DEMO-SCRIPT.md` to prepare client presentations
-5. **Expand**: Add more AWS services and use cases
-6. **Scale**: Roll out to entire organization
+3. **Package**: Run `./create-deployment-package.sh` for distribution
+4. **Integrate**: Follow `SERVICENOW-INTEGRATION.md` to connect ServiceNow
+5. **Demo**: Use `DEMO-SCRIPT.md` to prepare client presentations
+6. **Expand**: Add more AWS services and use cases
+7. **Scale**: Roll out to entire organization
 
 ---
 
