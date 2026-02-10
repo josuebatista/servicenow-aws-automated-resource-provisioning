@@ -1,5 +1,7 @@
 # ServiceNow-AWS Integration - Automated Resource Provisioning
 
+![Architecture Diagram](assets/SPA_ServiceNow-AWS.jpeg)
+
 ## Business Value & Use Cases
 
 ### The Challenge
