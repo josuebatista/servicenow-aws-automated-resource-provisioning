@@ -1,7 +1,5 @@
 # ServiceNow-AWS Integration - Automated Resource Provisioning
 
-![Architecture Diagram](assets/SPA_ServiceNow-AWS.jpeg)
-
 ## Business Value & Use Cases
 
 ### The Challenge
@@ -9,6 +7,8 @@ Organizations struggle with manual, time-consuming cloud resource provisioning t
 
 ### The Solution
 This integration enables **ServiceNow to dynamically provision AWS resources through a single API call**, creating complete, functional user environments in seconds. What traditionally required manual tickets, approvals, and IT intervention becomes instant and self-service.
+
+![Architecture Diagram](assets/SPA_ServiceNow-AWS.jpeg)
 
 ### Business Impact
 
