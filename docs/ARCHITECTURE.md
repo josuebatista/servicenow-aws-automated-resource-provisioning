@@ -6,7 +6,7 @@ This document describes the technical architecture of the ServiceNow-AWS integra
 
 ---
 
-![Architecture Diagram](assets/spa-architecture-small.jpeg)
+![Architecture Diagram](../assets/spa-architecture-small.jpeg)
 
 ## High-Level Architecture
 ```
