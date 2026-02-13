@@ -8,7 +8,7 @@ Organizations struggle with manual, time-consuming cloud resource provisioning t
 ### The Solution
 This integration enables **ServiceNow to dynamically provision AWS resources through a single API call**, creating complete, functional user environments in seconds. What traditionally required manual tickets, approvals, and IT intervention becomes instant and self-service.
 
-![Architecture Diagram](assets/SPA_ServiceNow-AWS.jpg)
+![Business Use Case](assets/SPA_ServiceNow-AWS.jpg)
 
 ### Business Impact
 
@@ -134,6 +134,9 @@ This integration enables **ServiceNow to dynamically provision AWS resources thr
 - No web servers to manage
 - Unlimited bandwidth and storage
 - Built-in redundancy and durability
+---
+
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical Architecture
 
 ---
 
